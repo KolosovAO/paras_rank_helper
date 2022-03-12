@@ -1,0 +1,19 @@
+{
+    "name": "Paras rank helper",
+    "version": "1.0",
+    "manifest_version": 3,
+    "permissions": [
+        "activeTab"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://paras.id/*"
+            ],
+            "js": [
+                "ranks.js"
+            ]
+        }
+    ],
+    "action": {}
+}
