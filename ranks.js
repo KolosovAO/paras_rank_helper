@@ -10,57 +10,68 @@ const getNodeFromSelector = (node, selector) => {
 };
 
 const isActivityTab = () => window.location.search.includes("tab=activity");
+const isProfilePage = () => window.location.href.match(/\/.+\/collectibles/);
+const isCollectionPage = () => window.location.href.includes("paras.id/collection");
 
-let has_ranks = false;
-
-let id_to_rank = {};
 let added_nodes = {};
 
-let last_loaded_collection_url;
+const loaded_ranks = {};
+const loaded_ranks_promises = {};
 
-const fetchRanks = async () => {
-    const collection_url = window.location.href.split("/").pop().split("?")[0];
-    if (collection_url === last_loaded_collection_url) {
-        return;
+const getRanks = (collection_url) => {
+    if (loaded_ranks_promises[collection_url]) {
+        return loaded_ranks_promises[collection_url];
     }
 
-    last_loaded_collection_url = collection_url;
-    id_to_rank = {};
-    has_ranks = false;
+    console.log("Start load ranks for " + collection_url);
 
-    const response = await fetch(`https://api.neararity.com/tokens?collection=${collection_url}&page=1&itemsPerPage=3500&keyword=&sortBy=rank`);
-    const collection = await response.json();
-    if (!collection || !collection.paginated || !collection.paginated.length) {
-        console.log("PROBLEM WITH LOAD RANKS");
-        return;
-    }
+    return loaded_ranks_promises[collection_url] =
+        fetch(`https://api.neararity.com/tokens?collection=${collection_url}&page=1&itemsPerPage=3500&keyword=&sortBy=rank`)
+            .then((res) => res.json())
+            .then((collection) => {
+                if (!collection || !collection.paginated || !collection.paginated.length) {
+                    throw new Error("no data");
+                }
 
-    has_ranks = true;
-    collection.paginated.forEach(({ index, rank, token_id }) => {
-        id_to_rank[index === void 0 ? token_id : index] = rank;
-    });
-    console.log("RANKS LOADED", id_to_rank);
+                const ranks = collection.paginated.reduce((acc, { index, rank, token_id }) => {
+                    acc[index === void 0 ? token_id : index] = rank;
+                    return acc;
+                }, {});
+                loaded_ranks[collection_url] = ranks;
+
+                console.log("Ranks for " + collection_url, ranks);
+                return ranks;
+            })
+            .catch(() => {
+                console.log("Problem with load ranks for " + collection_url);
+                return {};
+            });
 };
 
 const addRankToNode = (node) => {
     const index = +node.textContent.match(/\d+/)[0];
 
-    if (id_to_rank[index] === void 0) {
-        return;
+    const collection_url = isProfilePage()
+        ? node.parentNode.children[1].textContent.trim()
+        : window.location.href.split("/").pop().split("?")[0];
+
+    const addRankToNode = (rank) => {
+        if (rank === void 0 || added_nodes[`${collection_url}_${index}`]) {
+            return;
+        }
+        const element = document.createElement(isActivityTab() ? "SPAN" : "DIV");
+        element.style.color = "red";
+        element.style.fontSize = "17px";
+        element.style.fontWeight = 800;
+        element.textContent = rank;
+        added_nodes[`${collection_url}_${index}`] = element;
+        node.appendChild(element);
     }
 
-    if (added_nodes[index]) {
-        return;
+    if (loaded_ranks[collection_url]) {
+        addRankToNode(loaded_ranks[collection_url][index])
     } else {
-        const span = document.createElement("SPAN");
-        span.style.color = "red";
-        span.style.background = "rgba(0, 0, 0, 0.7)";
-        span.style.marginLeft = "auto";
-        span.style.fontSize = "17px";
-        span.style.fontWeight = 800;
-        span.textContent = id_to_rank[index];
-        added_nodes[index] = span;
-        node.appendChild(span);
+        getRanks(collection_url).then((ranks) => addRankToNode(ranks[index]));
     }
 };
 
@@ -71,21 +82,21 @@ const observer = new MutationObserver(async records => {
         console.log("URL CHANGED");
         old_url = window.location.href;
 
-        // Object.values(added_nodes).forEach(node => node.remove());
         added_nodes = {};
 
-        if (window.location.href.includes("paras.id/collection")) {
-            fetchRanks();
+        if (isCollectionPage()) {
+            const collection_url = window.location.href.split("/").pop().split("?")[0];
+            getRanks(collection_url);
         }
     }
 
-    if (window.location.href.includes("paras.id/collection")) {
+    if (isCollectionPage() || isProfilePage()) {
         const selector = isActivityTab()
             ? ACTIVITY_SELECTOR
             : CARD_SELECTOR;
 
         for (const { target } of records) {
-            if (has_ranks && target.nodeType === Node.ELEMENT_NODE && target.matches(selector)) {
+            if (target.nodeType === Node.ELEMENT_NODE && target.matches(selector)) {
                 addRankToNode(getNodeFromSelector(target, selector));
             }
         }
@@ -95,9 +106,13 @@ const observer = new MutationObserver(async records => {
             .forEach(addRankToNode);
     }
 });
+
 observer.observe(document.body, {
     childList: true,
     subtree: true,
 });
 
-fetchRanks();
+if (isCollectionPage()) {
+    const collection_url = window.location.href.split("/").pop().split("?")[0];
+    getRanks(collection_url);
+}
