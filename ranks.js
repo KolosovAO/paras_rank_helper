@@ -11,9 +11,6 @@ const getNodeFromSelector = (node, selector) => {
 
 const isActivityTab = () => window.location.search.includes("tab=activity");
 
-const getLeftOffset = () => isActivityTab() ? 0 : 30;
-const getTopOffset = () => 4 - window.scrollY;
-
 let has_ranks = false;
 
 let id_to_rank = {};
@@ -52,25 +49,18 @@ const addRankToNode = (node) => {
         return;
     }
 
-    const { right, top } = node.getBoundingClientRect();
-
     if (added_nodes[index]) {
-        const div = added_nodes[index];
-        div.style.left = right - getLeftOffset() + "px";
-        div.style.top = top - getTopOffset() + "px";
         return;
     } else {
-        const div = document.createElement("DIV");
-        div.style.position = "absolute";
-        div.style.left = right - getLeftOffset() + "px";
-        div.style.top = top - getTopOffset() + "px";
-        div.style.color = "red";
-        div.style.background = "rgba(0, 0, 0, 0.7)";
-        div.style.fontSize = 16;
-        div.style.fontWeight = 800;
-        div.textContent = id_to_rank[index];
-        added_nodes[index] = div;
-        document.body.appendChild(div);
+        const span = document.createElement("SPAN");
+        span.style.color = "red";
+        span.style.background = "rgba(0, 0, 0, 0.7)";
+        span.style.marginLeft = "auto";
+        span.style.fontSize = "17px";
+        span.style.fontWeight = 800;
+        span.textContent = id_to_rank[index];
+        added_nodes[index] = span;
+        node.appendChild(span);
     }
 };
 
@@ -81,7 +71,7 @@ const observer = new MutationObserver(async records => {
         console.log("URL CHANGED");
         old_url = window.location.href;
 
-        Object.values(added_nodes).forEach(node => node.remove());
+        // Object.values(added_nodes).forEach(node => node.remove());
         added_nodes = {};
 
         if (window.location.href.includes("paras.id/collection")) {
