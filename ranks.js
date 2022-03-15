@@ -1,20 +1,12 @@
-const CARD_SELECTOR = ".card-wrap > .card.bg-transparent";
-const ACTIVITY_SELECTOR = "a.font-semibold.z-20";
+const PAGE_TYPE = {
+    ACTIVITY: 1,
+    CREATION: 2,
+    TOKEN: 3,
+    COLLECTION: 4,
+}
 
-const getNodeFromSelector = (node, selector) => {
-    if (selector === CARD_SELECTOR) {
-        return node.children[0].children[0].children[0];
-    }
 
-    return node;
-};
-
-const isActivityTab = () => window.location.search.includes("tab=activity");
-const isProfilePage = () => window.location.href.match(/\/.+\/collectibles/);
-const isCollectionPage = () => window.location.href.includes("paras.id/collection");
-
-let added_nodes = {};
-
+// Ranks
 const loaded_ranks = {};
 const loaded_ranks_promises = {};
 
@@ -47,63 +39,119 @@ const getRanks = (collection_url) => {
                 return {};
             });
 };
+//
 
-const addRankToNode = (node) => {
-    const index = +node.textContent.match(/\d+/)[0];
+class Page {
+    constructor() {
+        this.update();
+    }
 
-    const collection_url = isProfilePage()
-        ? node.parentNode.children[1].textContent.trim()
-        : window.location.href.split("/").pop().split("?")[0];
-
-    const addRankToNode = (rank) => {
-        if (rank === void 0 || added_nodes[`${collection_url}_${index}`]) {
+    update() {
+        if (window.location.href === this.url) {
             return;
         }
-        const element = document.createElement(isActivityTab() ? "SPAN" : "DIV");
-        element.style.color = "red";
-        element.style.fontSize = "17px";
-        element.style.fontWeight = 800;
-        element.textContent = rank;
-        added_nodes[`${collection_url}_${index}`] = element;
-        node.appendChild(element);
+
+        this.collection = void 0;
+        this.added_nodes = {};
+        this.url = window.location.href;
+        this.type = this._updateType();
     }
 
-    if (loaded_ranks[collection_url]) {
-        addRankToNode(loaded_ranks[collection_url][index])
-    } else {
-        getRanks(collection_url).then((ranks) => addRankToNode(ranks[index]));
+    getSelector() {
+        if (this.type === PAGE_TYPE.ACTIVITY) {
+            return "a.font-semibold.z-20";
+        }
+
+        if (this.type === PAGE_TYPE.TOKEN) {
+            return ".overflow-x-hidden > h1";
+        }
+
+        return ".card-wrap > .card.bg-transparent";
     }
-};
 
-let old_url = window.location.href;
+    addRankToNode(target) {
+        const node = this._getTargetNode(target);
+        const index = +node.textContent.match(/\d+/)[0];
 
-const observer = new MutationObserver(async records => {
-    if (old_url !== window.location.href) {
-        console.log("URL CHANGED");
-        old_url = window.location.href;
+        const collection_url = this.type === PAGE_TYPE.CREATION
+            ? node.parentNode.children[1].textContent.trim()
+            : this.collection;
 
-        added_nodes = {};
+        const add = (rank) => {
+            if (rank === void 0 || this.added_nodes[`${collection_url}_${index}`]) {
+                return;
+            }
+            const element = document.createElement(
+                this.type === PAGE_TYPE.ACTIVITY ? "SPAN" : "DIV"
+            );
+            element.style.color = "red";
+            element.style.fontSize = this._getFontSize();
+            element.style.fontWeight = 800;
+            element.textContent = rank;
+            this.added_nodes[`${collection_url}_${index}`] = element;
+            node.appendChild(element);
+        }
 
-        if (isCollectionPage()) {
-            const collection_url = window.location.href.split("/").pop().split("?")[0];
-            getRanks(collection_url);
+        if (loaded_ranks[collection_url]) {
+            add(loaded_ranks[collection_url][index])
+        } else {
+            getRanks(collection_url).then((ranks) => add(ranks[index]));
         }
     }
 
-    if (isCollectionPage() || isProfilePage()) {
-        const selector = isActivityTab()
-            ? ACTIVITY_SELECTOR
-            : CARD_SELECTOR;
+    _updateType() {
+        if (window.location.href.includes("paras.id/collection")) {
+            this.collection = window.location.href.split("/").pop().split("?")[0];
+            getRanks(this.collection);
+
+            if (window.location.search.includes("tab=activity")) {
+                return PAGE_TYPE.ACTIVITY;
+            }
+
+            return PAGE_TYPE.COLLECTION;
+        }
+
+        if (window.location.href.match(/\/.+\/(collectibles|creation)/)) {
+            return PAGE_TYPE.CREATION;
+        }
+
+        if (window.location.href.includes("paras.id/token/")) {
+            this.collection = window.location.href.split("/token/")[1].split(":")[0];
+            return PAGE_TYPE.TOKEN;
+        }
+    }
+
+    _getTargetNode(node) {
+        if (this.type === PAGE_TYPE.ACTIVITY || this.type === PAGE_TYPE.TOKEN) {
+            return node;
+        }
+
+        return node.children[0].children[0].children[0];
+    }
+
+    _getFontSize() {
+        if (this.type === PAGE_TYPE.TOKEN) {
+            return "25px";
+        }
+        return "17px";
+    }
+}
+
+const page = new Page();
+
+const observer = new MutationObserver((records) => {
+    page.update();
+
+    if (page.type) {
+        const selector = page.getSelector();
 
         for (const { target } of records) {
             if (target.nodeType === Node.ELEMENT_NODE && target.matches(selector)) {
-                addRankToNode(getNodeFromSelector(target, selector));
+                page.addRankToNode(target);
             }
         }
 
-        [...document.querySelectorAll(selector)]
-            .map((target) => getNodeFromSelector(target, selector))
-            .forEach(addRankToNode);
+        [...document.querySelectorAll(selector)].forEach((node) => page.addRankToNode(node));
     }
 });
 
@@ -111,8 +159,3 @@ observer.observe(document.body, {
     childList: true,
     subtree: true,
 });
-
-if (isCollectionPage()) {
-    const collection_url = window.location.href.split("/").pop().split("?")[0];
-    getRanks(collection_url);
-}
