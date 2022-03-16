@@ -15,5 +15,15 @@
             ]
         }
     ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "local/*"
+            ],
+            "matches": [
+                "https://paras.id/*"
+            ]
+        }
+    ],
     "action": {}
 }
