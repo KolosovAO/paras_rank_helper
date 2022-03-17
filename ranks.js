@@ -12,7 +12,8 @@ class RankStorage {
         this.loaded_promises = {};
 
         this.local_collections = new Set([
-            "dragonnation.near"
+            "dragonnation.near",
+            "mara-smartcontract.near"
         ]);
     }
 
